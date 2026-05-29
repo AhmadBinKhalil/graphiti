@@ -1,0 +1,54 @@
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    restart: unless-stopped
+    expose:
+      - "6379"
+    volumes:
+      - falkordb_data:/data
+    environment:
+      - FALKORDB_ARGS=--port 6379 --cluster-enabled no
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+
+  graphiti:
+    build:
+      context: .
+      args:
+        INSTALL_FALKORDB: "true"
+    restart: unless-stopped
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?}
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-default_db}
+      - GRAPHITI_BACKEND=falkordb
+      - db_backend=falkordb
+      - PORT=8000
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-2}
+      - GRAPHITI_GROUP_ID=${GRAPHITI_GROUP_ID:-main}
+      - GRAPHITI_TELEMETRY_ENABLED=${GRAPHITI_TELEMETRY_ENABLED:-false}
+
+volumes:
+  falkordb_data:
